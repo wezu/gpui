@@ -5,7 +5,6 @@ load_prc_file_data("", "show-frame-rate-meter  1")
 load_prc_file_data('','textures-power-2 None')
 load_prc_file_data("", "show-buffers 1")
 load_prc_file_data("", "gl-version 3 2")
-load_prc_file_data("", "buffer-viewer-position ulcorner")
 from direct.showbase import ShowBase
 
 from gpui import *
@@ -20,10 +19,10 @@ class App(DirectObject):
 
         #make some sample data
         self.gui.make_group('test')
-
-        b=Button(gui=self.gui, width=128, group='test', on_click_cmd='print("button id:{0} clicked!".format(self.id))')#, name='test1', parent=None, group='group_0', on_click_cmd=None)
-        b.set_pos(0, 32)
-        s=Slider(gui=self.gui, parent=None, group='test', name='slider', width=128, on_move_cmd='print("slider pos:({0:.0f}, {1:.0f})".format(*self.total_delta))')
+        #stress test, make 1000 buttons - may not fit screen
+        for x in range(50):
+            for y in range(20):
+                Button(gui=self.gui, width=32, group='test', pos=(-16+x*32, y*32), on_click_cmd='print("button id:{0} clicked!".format(self.id))')
 
         self.gui.close_group('test')
 

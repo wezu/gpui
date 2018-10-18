@@ -51,11 +51,11 @@ void main()
     color_id.w=1.0;
 
     //clip from bottom
-    if (gl_FragCoord.y < clip.y)
-        discard;
+    //if (gl_FragCoord.y < clip.y)
+    //    discard;
     //clip from top
-    if (gl_FragCoord.y > clip.x)
-        discard;
+    //if (gl_FragCoord.y > clip.x)
+    //    discard;
 
     vec4 mouse_color=texture(mouse_tex, vec2(0.5, 0.5));
     vec2 final_uv=uv;

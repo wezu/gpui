@@ -58,12 +58,20 @@ class Gui(DirectObject):
         lens = OrthographicLens()
         lens.set_film_size(1, 1)
         self.mouse_cam.node().set_lens(lens)
+        #shader for the mouse cam - ignored WFT?
+        #the idea was to render the gui using a shader that outputs the color_id
+        #so that we don't need a second render target
+        #but the camera just ignores the shader, no idea why
+        #state_node = NodePath(PandaNode("state_node"))
+        #state_node.set_shader(Shader.load(Shader.SL_GLSL, 'v.glsl', 'f.glsl'), 1)
+        #self.mouse_cam.node().set_initial_state(state_node.get_state())
+
 
         #pfm for dynamic data
         #clip planes
         self.pfm_clips=PfmFile()
         self.pfm_clips.clear(x_size=128, y_size=128, num_channels=4)
-        self.pfm_clips.fill(Point4(600.0, 0.0, 800.0, 0.0))#top, bottom, left, right in gl_FragCoord
+        self.pfm_clips.fill(Point4(self.win_size[1], 0.0, self.win_size[0], 0.0))#top, bottom, left, right in gl_FragCoord
         #pos, scale
         self.pfm_pos_scale=PfmFile()
         self.pfm_pos_scale.clear(x_size=128, y_size=128, num_channels=4)
@@ -113,8 +121,16 @@ class Gui(DirectObject):
         return self.element_id[name]
 
     def on_window_resize(self):
-        ##ToDo: resize buff
-        pass
+        size=base.get_size()
+        self.buff.set_size(*size)
+        self.gui_cam.node().get_lens().set_film_size(*size)
+        self.gui_cam.set_pos(size[0]//2,size[1]//2,100)
+
+        for node in self.nodes.values():
+            node.node().set_bounds(BoundingBox((0,0,0), (size[0], size[1], 1000)))
+
+        ##TODO: update clip planes!
+
     def on_window_minimize(self):
         pass
     def on_window_focus(self):
@@ -132,7 +148,7 @@ class Gui(DirectObject):
             self.win_size = base.get_size()
 
     def on_mouse_down(self):
-        '''Fired when the mouse button is pressed'''
+        """Fired when the mouse button is pressed"""
         self.mouse_is_down=True
         self.gui_root.set_shader_input('click', 1.0)
         base.graphicsEngine.render_frame()
@@ -143,7 +159,7 @@ class Gui(DirectObject):
         self.last_mouse_down_id=self.color_to_id(c)
 
     def on_mouse_up(self):
-        '''Fired when the mouse button is released'''
+        """Fired when the mouse button is released"""
         if not self.last_frame_mouse_is_down:
             #the mouse down/held has not yet been processed
             #common for touchscreen mouse
@@ -152,7 +168,7 @@ class Gui(DirectObject):
         self.gui_root.set_shader_input('click', 0.0)
 
     def on_mouse_hold(self, delta):
-        '''Fired each frame when the mouse button is held'''
+        """Fired each frame when the mouse button is held"""
         if delta.length_squared()>0.0:
             id=self.last_mouse_down_id
             if id != 0 and id in self.hold_commands:
@@ -160,7 +176,7 @@ class Gui(DirectObject):
 
 
     def on_mouse_click(self):
-        '''Fired on mouse click'''
+        """Fired on mouse click"""
         base.graphicsEngine.render_frame()
         p=PNMImage(1, 1,4)
         base.graphicsEngine.extract_texture_data(self.mouse_tex, base.win.getGsg())
@@ -178,6 +194,11 @@ class Gui(DirectObject):
         self.update_clips=True
         #self.clip_tex.load(self.pfm_clips)
         #self.gui_root.set_shader_input('clips', t)
+
+    def get_pos_scale(self, id):
+        uv_x=id%128
+        uv_y=id//128
+        return self.pfm_pos_scale.get_point4(uv_x, uv_y)
 
     def set_pos_scale(self, id, x=None, y=None, sx=None, sy=None):
         uv_x=id%128
@@ -218,21 +239,21 @@ class Gui(DirectObject):
         return color
 
     def update(self, task=None):
-        ''' Update task run every frame, or more often (on_mouse_up)'''
+        """ Update task run every frame, or more often (on_mouse_up)"""
         #update inputs
         if self.update_clips:
             self.update_clips=False
             self.clip_tex.load(self.pfm_clips)
-            self.gui_root.set_shader_input('clips', self.clip_tex)
+            #self.gui_root.set_shader_input('clips', self.clip_tex)
         if self.update_pos_scale:
             self.update_pos_scale=False
             self.pos_scale_tex.load(self.pfm_pos_scale)
-            self.gui_root.set_shader_input('pos_scale', self.pos_scale_tex)
+            #self.gui_root.set_shader_input('pos_scale', self.pos_scale_tex)
         #track mouse
         if base.mouseWatcherNode.hasMouse():
             mouse_pos = (base.mouseWatcherNode.get_mouse()+Point2(1.0, 1.0))/2.0
-            mouse_pos.x=mouse_pos.x*800
-            mouse_pos.y=600-(mouse_pos.y*600)
+            mouse_pos.x=mouse_pos.x*self.win_size[0]
+            mouse_pos.y=self.win_size[1]-(mouse_pos.y*self.win_size[1])
             self.mouse_cam.set_pos(mouse_pos.x, mouse_pos.y, 100)
             #dispatch click events if any
             if not self.mouse_is_down and self.last_frame_mouse_is_down:
@@ -342,6 +363,7 @@ class Gui(DirectObject):
         gnode.add_geom(geom)
         size=base.get_size()
         gnode.set_bounds(BoundingBox((0,0,0), (size[0], size[1], 1000)))
+        #gnode.set_bounds(OmniBoundingVolume())
         np=self.gui_root.attach_new_node(gnode)
         np.set_shader(Shader.make(Shader.SLGLSL, shaders.widget.vertex, shaders.widget.fragment),1)
         np.set_transparency(TransparencyAttrib.MAlpha, 1)
@@ -357,7 +379,7 @@ class Gui(DirectObject):
         props.set_srgb_color(False)
         if aux_tex is not None:
             props.set_aux_rgba(True)
-        flags=GraphicsPipe.BF_refuse_window | GraphicsPipe.BF_rtt_cumulative
+        flags=GraphicsPipe.BF_refuse_window | GraphicsPipe.BF_rtt_cumulative | GraphicsPipe.BF_resizeable
         buff= base.graphicsEngine.make_output(pipe = base.pipe,
                                              name = name,
                                              sort = -2,
